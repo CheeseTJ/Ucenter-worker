@@ -1,0 +1,55 @@
+/**
+ * 用户中心 Worker：统一账号 / 设备 / 令牌 / 邀请码，只对外提供 REST API。
+ * 配置参考：https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "user-center",
+	"main": "src/index.ts",
+	"account_id": "1b53bebb48213cfdf6e43cd71d931741",
+	"compatibility_date": "2026-05-29",
+	"observability": {
+		"enabled": true
+	},
+	"upload_source_maps": true,
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "user-center-db",
+			"database_id": "ff49b636-03d2-417a-8fad-8a811114c813"
+		}
+	],
+	// 撞库防护：同一 Cloudflare 节点内，同一 key 每分钟最多 20 次认证尝试
+	// https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+	"ratelimits": [
+		{
+			"name": "RL_AUTH",
+			"namespace_id": "2001",
+			"simple": {
+				"limit": 20,
+				"period": 60
+			}
+		}
+	],
+	"vars": {
+		// 允许接入的应用白名单（决定 JWT 的 aud），新增项目在此追加
+		"APPS": "jmreader,music",
+		// 访问令牌有效期（秒），短过期是「无法即时吊销」的补偿手段
+		"ACCESS_TOKEN_TTL": "900",
+		// 刷新令牌有效期（秒），90 天
+		"REFRESH_TOKEN_TTL": "7776000",
+		// 口令哈希迭代次数。免费套餐单请求 CPU 上限 10ms，10 万次迭代会触发 1102 错误，
+		// 故按免费额度取 10000，靠 RL_AUTH 限流与 PASSWORD_PEPPER 补偿。
+		// 升级付费套餐后可调回 100000 以上（存储格式自描述，老用户登录时自动按新参数重算）
+		"PBKDF2_ITERATIONS": "10000",
+		// 允许的跨域来源，逗号分隔；留空表示允许所有来源
+		// （本服务只认 Authorization 头里的 Bearer 令牌，不依赖 Cookie，故通配风险可控）
+		"ALLOWED_ORIGINS": ""
+	}
+	/**
+	 * 需要配置的 secret（`npx wrangler secret put <NAME>`）：
+	 *   JWT_PRIVATE_JWK    Ed25519 私钥 JWK（含 x 与 d），公钥由它推导，无需另外配置
+	 *   PASSWORD_PEPPER    口令哈希的 pepper，不落库；一旦更换所有用户需重置密码
+	 *   ADMIN_TOKEN        /v1/admin/* 的管理令牌
+	 */
+}

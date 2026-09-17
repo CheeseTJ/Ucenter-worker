@@ -1,0 +1,57 @@
+name: Deploy
+
+# push 到 master 自动 wrangler deploy。
+# schema.sql 是幂等的（CREATE TABLE IF NOT EXISTS），每次部署顺带执行一次。
+#
+# 凭据约定：部署用的 Cloudflare API Token 统一存放在 KV 命名空间「infra-secrets」
+# 的 cloudflare-api-token 键，需要时从那取。本地副本见 gitignore 的 cloudflare-api-token.txt。
+#
+# 该 token 配了 IP 白名单，只放行本机出口地址：
+#   149.118.55.214/32
+#   2603:c02b:30b:5c01:0:b6be:fffe:785e   （IPv6，控制台会省略 /128，属正常归一化）
+# 两个注意点：
+#   1. IPv6 是 DHCPv6 动态下发的（非静态固定）。若哪天出口地址变了，会报
+#      9109 Cannot use the access token from location，届时把新地址补进白名单即可。
+#   2. GitHub 托管 runner 的出口 IP 与上面完全不同，用这个 token 同样报 9109。
+#      要在 CI 里跑，需另建一个不限 IP 的窄权限 token，或改用本机的 self-hosted runner。
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'schema.sql'
+      - 'wrangler.jsonc'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # wrangler 4 要求 Node >= 22
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Deploy
+        env:
+          # 账号 ID 写在 wrangler.jsonc 的 account_id 里，这里不用再传
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler deploy
+
+      - name: Apply D1 schema
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler d1 execute user-center-db --remote --file=./schema.sql

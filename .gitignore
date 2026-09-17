@@ -1,0 +1,10 @@
+node_modules/
+.wrangler/
+.xdg/
+.build/
+
+# 本地开发密钥（JWT_PRIVATE_JWK / PASSWORD_PEPPER / ADMIN_TOKEN），绝不入库
+.dev.vars
+.dev.vars.*
+.secrets*
+cloudflare-api-token.txt
