@@ -74,16 +74,23 @@ export async function resolveDevice(
 export async function issueTokenPair(
   env: Env,
   issuer: string,
-  params: { userId: string; deviceId: string; app: string; now: number }
+  params: {
+    userId: string;
+    email: string;
+    role: string;
+    deviceId: string;
+    app: string;
+    now: number;
+  }
 ): Promise<TokenPair> {
-  const { userId, deviceId, app, now } = params;
+  const { userId, email, role, deviceId, app, now } = params;
   const ttl = accessTtl(env);
   const refresh = newRefreshToken();
 
   const accessToken = await signAccessToken(
     env,
     issuer,
-    { userId, app, deviceId, jti: randomId("jti") },
+    { userId, email, role, app, deviceId, jti: randomId("jti") },
     ttl,
     now
   );
@@ -143,10 +150,10 @@ export async function rotateRefreshToken(
   }
 
   const user = await env.DB.prepare(
-    "SELECT id, status FROM users WHERE id = ?"
+    "SELECT id, email, role, status FROM users WHERE id = ?"
   )
     .bind(row.user_id)
-    .first<{ id: string; status: string }>();
+    .first<{ id: string; email: string; role: string; status: string }>();
   if (!user || user.status !== "active") {
     return { ok: false, reason: "user_inactive" };
   }
@@ -158,7 +165,7 @@ export async function rotateRefreshToken(
   const accessToken = await signAccessToken(
     env,
     issuer,
-    { userId: row.user_id, app, deviceId: row.device_id, jti: randomId("jti") },
+    { userId: row.user_id, email: user.email, role: user.role, app, deviceId: row.device_id, jti: randomId("jti") },
     ttl,
     now
   );

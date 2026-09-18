@@ -22,13 +22,18 @@ interface DeviceRow {
 
 meRoute.get("/", async (c) => {
   const user = await c.env.DB.prepare(
-    "SELECT id, email, status, created_at FROM users WHERE id = ?"
+    "SELECT id, email, status, role, created_at FROM users WHERE id = ?"
   )
     .bind(c.get("userId"))
     .first();
   if (!user) return fail(c, 404, "not_found", "账号不存在");
 
-  return c.json({ user, device_id: c.get("deviceId"), app: c.get("app") });
+  return c.json({
+    user,
+    device_id: c.get("deviceId"),
+    app: c.get("app"),
+    role: c.get("role"),
+  });
 });
 
 meRoute.post("/password", async (c) => {
@@ -45,10 +50,10 @@ meRoute.post("/password", async (c) => {
 
   const userId = c.get("userId");
   const row = await c.env.DB.prepare(
-    "SELECT password_hash FROM users WHERE id = ?"
+    "SELECT email, role, password_hash FROM users WHERE id = ?"
   )
     .bind(userId)
-    .first<{ password_hash: string }>();
+    .first<{ email: string; role: string; password_hash: string }>();
   if (!row) return fail(c, 404, "not_found", "账号不存在");
 
   const oldOk = await verifyPassword(
@@ -79,6 +84,8 @@ meRoute.post("/password", async (c) => {
 
   const pair = await issueTokenPair(c.env, new URL(c.req.url).origin, {
     userId,
+    email: row.email,
+    role: row.role,
     deviceId,
     app: c.get("app"),
     now: at,

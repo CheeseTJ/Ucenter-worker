@@ -31,9 +31,14 @@
 			}
 		}
 	],
+	// Cron Trigger：每天 19:00 UTC（北京时间次日 03:00）清理过期的登录审计记录。
+	// 没有这条，login_attempts 会只进不出；正常用量下无感，被撞库时是唯一的兜底。
+	"triggers": {
+		"crons": ["0 19 * * *"]
+	},
 	"vars": {
 		// 允许接入的应用白名单（决定 JWT 的 aud），新增项目在此追加
-		"APPS": "jmreader,music",
+		"APPS": "jmreader,music,cicd",
 		// 访问令牌有效期（秒），短过期是「无法即时吊销」的补偿手段
 		"ACCESS_TOKEN_TTL": "900",
 		// 刷新令牌有效期（秒），90 天
@@ -42,6 +47,8 @@
 		// 故按免费额度取 10000，靠 RL_AUTH 限流与 PASSWORD_PEPPER 补偿。
 		// 升级付费套餐后可调回 100000 以上（存储格式自描述，老用户登录时自动按新参数重算）
 		"PBKDF2_ITERATIONS": "10000",
+		// 登录审计保留天数。到期由 Cron Trigger 分批清理
+		"LOGIN_ATTEMPT_RETENTION_DAYS": "7",
 		// 允许的跨域来源，逗号分隔；留空表示允许所有来源
 		// （本服务只认 Authorization 头里的 Bearer 令牌，不依赖 Cookie，故通配风险可控）
 		"ALLOWED_ORIGINS": ""

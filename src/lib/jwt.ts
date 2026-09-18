@@ -7,6 +7,10 @@ import { fromBase64Url, toBase64Url, utf8 } from "./bytes";
 
 export interface AccessTokenInput {
   userId: string;
+  /** 放进声明里，业务服务据此做白名单/展示，免去回源查 /v1/me */
+  email: string;
+  /** user | admin，用户中心自己的管理接口据此放行 */
+  role: string;
   /** 目标应用（JWT 的 aud），业务服务据此判断该令牌是否有权访问自己 */
   app: string;
   deviceId: string;
@@ -22,6 +26,8 @@ export interface AccessClaims {
   jti: string;
   device_id: string;
   scope: string;
+  email: string;
+  role: string;
 }
 
 interface SigningKey {
@@ -98,6 +104,8 @@ export async function signAccessToken(
     jti: input.jti,
     device_id: input.deviceId,
     scope: "user",
+    email: input.email,
+    role: input.role,
   };
 
   const signingInput = `${toBase64Url(utf8(JSON.stringify(header)))}.${toBase64Url(

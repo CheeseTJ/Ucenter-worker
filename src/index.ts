@@ -1,7 +1,8 @@
 import { Hono } from "hono";
-import type { AppEnv } from "./env";
+import type { AppEnv, Env } from "./env";
 import { fail } from "./lib/http";
 import { publicJwks } from "./lib/jwt";
+import { purgeOldAttempts } from "./lib/retention";
 import { adminRoute } from "./routes/admin";
 import { authRoute } from "./routes/auth";
 import { meRoute } from "./routes/me";
@@ -54,4 +55,23 @@ app.onError((error, c) => {
   return fail(c, 500, "internal_error", "服务器内部错误");
 });
 
-export default app;
+// Cron Trigger：清理过期的登录审计记录（见 wrangler.jsonc 的 triggers）。
+// Hono 没有内置的定时入口，按 Workers 约定的对象形式导出。
+export default {
+  fetch: app.fetch,
+
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    // 用 scheduledTime 而不是 Date.now()，保证同一次触发内的时间基准一致
+    const nowSeconds = Math.floor(event.scheduledTime / 1000);
+    ctx.waitUntil(
+      purgeOldAttempts(env, nowSeconds)
+        .then((removed) => {
+          if (removed > 0) console.log(`[user-center] 已清理 ${removed} 条过期登录审计`);
+        })
+        .catch((error) => {
+          // 清理失败不影响服务，下次触发会继续
+          console.error("[user-center] 登录审计清理失败", error);
+        })
+    );
+  },
+};

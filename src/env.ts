@@ -21,6 +21,8 @@ export interface Env {
   REFRESH_TOKEN_TTL: string;
   /** 口令哈希迭代次数 */
   PBKDF2_ITERATIONS: string;
+  /** 登录审计记录保留天数，默认 7 */
+  LOGIN_ATTEMPT_RETENTION_DAYS?: string;
   /** 允许的跨域来源，逗号分隔；留空表示允许所有来源 */
   ALLOWED_ORIGINS: string;
 }
@@ -29,6 +31,8 @@ export interface Variables {
   userId: string;
   deviceId: string;
   app: string;
+  /** 当前请求者的角色：user | admin */
+  role: string;
 }
 
 export type AppEnv = { Bindings: Env; Variables: Variables };

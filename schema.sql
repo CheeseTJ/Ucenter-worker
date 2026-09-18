@@ -8,9 +8,14 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   -- active | banned | deleted
   status        TEXT NOT NULL DEFAULT 'active',
+  -- admin | user：admin 可访问 /v1/admin/*，user 只能操作自己
+  role          TEXT NOT NULL DEFAULT 'user',
   created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
   deleted_at    INTEGER
 );
+-- 注意：CREATE TABLE IF NOT EXISTS 不会给已存在的表补列。
+-- 老库升级需手工执行一次（幂等，重复执行会报 duplicate column 可忽略）：
+--   ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user';
 
 -- 邀请码：明文不落库，只存哈希
 CREATE TABLE IF NOT EXISTS invites (

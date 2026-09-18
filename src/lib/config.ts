@@ -13,6 +13,12 @@ export function pbkdf2Iterations(env: Env): number {
   return Number(env.PBKDF2_ITERATIONS) || 100_000;
 }
 
+/** 登录审计的保留天数，默认 7 天 */
+export function retentionDays(env: Env): number {
+  const days = Number(env.LOGIN_ATTEMPT_RETENTION_DAYS);
+  return Number.isFinite(days) && days > 0 ? days : 7;
+}
+
 export function allowedApps(env: Env): string[] {
   return (env.APPS || "")
     .split(",")

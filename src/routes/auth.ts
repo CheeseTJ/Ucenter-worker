@@ -32,6 +32,7 @@ interface UserRow {
   email: string;
   password_hash: string;
   status: string;
+  role: string;
 }
 
 // 账号不存在与密码错误返回同一句提示，避免被用来枚举已注册邮箱
@@ -57,11 +58,16 @@ async function recordAttempt(
   ok: boolean,
   at: number
 ): Promise<void> {
-  await env.DB.prepare(
-    "INSERT INTO login_attempts (email, ip, ok, at) VALUES (?, ?, ?, ?)"
-  )
-    .bind(email, ip, ok ? 1 : 0, at)
-    .run();
+  try {
+    await env.DB.prepare(
+      "INSERT INTO login_attempts (email, ip, ok, at) VALUES (?, ?, ?, ?)"
+    )
+      .bind(email, ip, ok ? 1 : 0, at)
+      .run();
+  } catch (error) {
+    // 审计只是旁路：写不进去（例如库写满）也不该让登录本身失败
+    console.error("[user-center] 写入登录审计失败", error);
+  }
 }
 
 authRoute.post("/register", async (c) => {
@@ -130,6 +136,9 @@ authRoute.post("/register", async (c) => {
   );
   const pair = await issueTokenPair(c.env, issuerOf(c), {
     userId,
+    email,
+    // 新注册一律是普通用户；提升管理员只能由已有管理员或 ADMIN_TOKEN 操作
+    role: "user",
     deviceId,
     app,
     now: at,
@@ -162,7 +171,7 @@ authRoute.post("/login", async (c) => {
 
   const iterations = pbkdf2Iterations(c.env);
   const user = await c.env.DB.prepare(
-    "SELECT id, email, password_hash, status FROM users WHERE email = ?"
+    "SELECT id, email, password_hash, status, role FROM users WHERE email = ?"
   )
     .bind(email)
     .first<UserRow>();
@@ -217,6 +226,8 @@ authRoute.post("/login", async (c) => {
   );
   const pair = await issueTokenPair(c.env, issuerOf(c), {
     userId: user.id,
+    email: user.email,
+    role: user.role,
     deviceId,
     app,
     now: at,

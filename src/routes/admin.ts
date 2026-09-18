@@ -1,4 +1,5 @@
-// 管理接口：邀请码、用户封禁、强制下线（仅凭 ADMIN_TOKEN 访问）
+// 管理接口：概览、用户、邀请码、强制下线
+// 准入由 requireAdmin 负责：接受 admin 角色的登录令牌，或静态 ADMIN_TOKEN
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { fail, readJson } from "../lib/http";
@@ -11,6 +12,30 @@ export const adminRoute = new Hono<AppEnv>();
 adminRoute.use("*", requireAdmin);
 
 const MAX_PAGE_SIZE = 200;
+
+// 账号可选状态。deleted 是软删除：账号立即不能登录，但业务数据保留
+const ALLOWED_STATUS = ["active", "banned", "deleted"] as const;
+type UserStatus = (typeof ALLOWED_STATUS)[number];
+
+/** 概览统计：管理页面首屏用，避免前端拉全量列表自己算 */
+adminRoute.get("/overview", async (c) => {
+  const stats = await c.env.DB.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM users)                                  AS users,
+       (SELECT COUNT(*) FROM users WHERE status = 'banned')           AS banned,
+       (SELECT COUNT(*) FROM users WHERE status = 'deleted')          AS deleted,
+       (SELECT COUNT(*) FROM devices WHERE revoked_at IS NULL)        AS devices,
+       (SELECT COUNT(*) FROM invites
+          WHERE (expires_at IS NULL OR expires_at > unixepoch())
+            AND (max_uses = 0 OR uses < max_uses))                    AS invites`
+  ).first();
+
+  const attempts = await c.env.DB.prepare(
+    `SELECT email, ip, ok, at FROM login_attempts ORDER BY at DESC LIMIT 12`
+  ).all();
+
+  return c.json({ stats, attempts: attempts.results });
+});
 
 adminRoute.post("/invites", async (c) => {
   const body = (await readJson<Record<string, unknown>>(c)) ?? {};
@@ -53,8 +78,13 @@ adminRoute.get("/users", async (c) => {
   const offset = Math.max(Number(c.req.query("offset")) || 0, 0);
 
   const rows = await c.env.DB.prepare(
-    `SELECT id, email, status, created_at FROM users
-     ORDER BY created_at DESC LIMIT ? OFFSET ?`
+    `SELECT u.id, u.email, u.status, u.role, u.created_at,
+            (SELECT COUNT(*) FROM devices d
+               WHERE d.user_id = u.id AND d.revoked_at IS NULL)        AS devices,
+            (SELECT MAX(d.last_seen) FROM devices d
+               WHERE d.user_id = u.id)                                  AS last_seen
+     FROM users u
+     ORDER BY u.created_at DESC LIMIT ? OFFSET ?`
   )
     .bind(limit, offset)
     .all();
@@ -70,22 +100,32 @@ adminRoute.patch("/users/:id", async (c) => {
   if (!body || typeof body.status !== "string") {
     return fail(c, 400, "invalid_status", "缺少 status 参数");
   }
-  const status = body.status;
-  if (status !== "active" && status !== "banned") {
-    return fail(c, 400, "invalid_status", "status 只能是 active 或 banned");
+  const status = body.status as UserStatus;
+  if (!ALLOWED_STATUS.includes(status)) {
+    return fail(c, 400, "invalid_status", `status 只能是 ${ALLOWED_STATUS.join(" / ")}`);
   }
 
   const userId = c.req.param("id");
+  // 自己把自己封禁/注销会直接锁死管理入口，服务端必须拦住（前端禁用只是提示）
+  if (userId === c.get("userId")) {
+    return fail(c, 400, "self_forbidden", "不能对自己执行该操作");
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  // 注销时记录 deleted_at（已注销过则保留首次时间），恢复时清空
   const updated = await c.env.DB.prepare(
-    "UPDATE users SET status = ? WHERE id = ?"
+    `UPDATE users
+     SET status = ?,
+         deleted_at = CASE WHEN ? = 'deleted' THEN COALESCE(deleted_at, ?) ELSE NULL END
+     WHERE id = ?`
   )
-    .bind(status, userId)
+    .bind(status, status, now, userId)
     .run();
   if (!updated.meta.changes) return fail(c, 404, "not_found", "用户不存在");
 
-  // 封禁必须同时吊销令牌，否则封禁要等访问令牌过期才真正生效
-  if (status === "banned") {
-    await revokeAllForUser(c.env, userId, Math.floor(Date.now() / 1000));
+  // 封禁与注销都必须同时吊销令牌，否则要等访问令牌过期才真正生效
+  if (status !== "active") {
+    await revokeAllForUser(c.env, userId, now);
   }
   return c.json({ ok: true, id: userId, status });
 });
