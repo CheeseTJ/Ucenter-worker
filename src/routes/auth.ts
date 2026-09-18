@@ -114,11 +114,16 @@ authRoute.post("/register", async (c) => {
     c.env.PASSWORD_PEPPER
   );
 
+  // 首个注册的账号自动成为管理员，避免「没有管理员就没法引导」的死结；
+  // 之后再注册的一律是普通用户，提升/降级走 /v1/admin/users/:id
+  const count = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM users").first<{ n: number }>();
+  const role = (count?.n ?? 0) === 0 ? "admin" : "user";
+
   try {
     await c.env.DB.prepare(
-      "INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)"
+      "INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, ?)"
     )
-      .bind(userId, email, passwordHash)
+      .bind(userId, email, passwordHash, role)
       .run();
   } catch {
     // email 上有 UNIQUE 约束；能走到这里说明并发注册了同一邮箱
@@ -137,8 +142,7 @@ authRoute.post("/register", async (c) => {
   const pair = await issueTokenPair(c.env, issuerOf(c), {
     userId,
     email,
-    // 新注册一律是普通用户；提升管理员只能由已有管理员或 ADMIN_TOKEN 操作
-    role: "user",
+    role,
     deviceId,
     app,
     now: at,

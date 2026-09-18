@@ -97,21 +97,38 @@ adminRoute.get("/users", async (c) => {
 
 adminRoute.patch("/users/:id", async (c) => {
   const body = await readJson<Record<string, unknown>>(c);
-  if (!body || typeof body.status !== "string") {
-    return fail(c, 400, "invalid_status", "缺少 status 参数");
+  if (!body || (typeof body.status !== "string" && typeof body.role !== "string")) {
+    return fail(c, 400, "invalid_body", "缺少 status 或 role 参数");
   }
+
+  const userId = c.req.param("id");
+  const now = Math.floor(Date.now() / 1000);
+
+  // 变更角色：提升 / 降级。降级后该账号下次刷新令牌时 role 声明即失效，
+  // 但 requireAdmin 每次都回查库里的实时角色，所以降级立即生效。
+  if (typeof body.role === "string") {
+    if (body.role !== "admin" && body.role !== "user") {
+      return fail(c, 400, "invalid_role", "role 只能是 admin 或 user");
+    }
+    if (userId === c.get("userId")) {
+      return fail(c, 400, "self_forbidden", "不能修改自己的角色");
+    }
+    const r = await c.env.DB.prepare("UPDATE users SET role = ? WHERE id = ?")
+      .bind(body.role, userId)
+      .run();
+    if (!r.meta.changes) return fail(c, 404, "not_found", "用户不存在");
+    return c.json({ ok: true, id: userId, role: body.role });
+  }
+
   const status = body.status as UserStatus;
   if (!ALLOWED_STATUS.includes(status)) {
     return fail(c, 400, "invalid_status", `status 只能是 ${ALLOWED_STATUS.join(" / ")}`);
   }
-
-  const userId = c.req.param("id");
   // 自己把自己封禁/注销会直接锁死管理入口，服务端必须拦住（前端禁用只是提示）
   if (userId === c.get("userId")) {
     return fail(c, 400, "self_forbidden", "不能对自己执行该操作");
   }
 
-  const now = Math.floor(Date.now() / 1000);
   // 注销时记录 deleted_at（已注销过则保留首次时间），恢复时清空
   const updated = await c.env.DB.prepare(
     `UPDATE users

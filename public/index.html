@@ -395,6 +395,11 @@ tbody tr:nth-child(3n) .stamp{transform:rotate(-2deg)}
         <label class="lab" for="fPass">口令</label>
         <input class="inp" id="fPass" type="password" placeholder="至少 8 位" required />
       </div>
+      <!-- 仅注册模式显示。用 display:none 隐藏时浏览器不做原生校验，故在 JS 里显式比对 -->
+      <div id="pass2Wrap" class="hidden">
+        <label class="lab" for="fPass2">确认口令</label>
+        <input class="inp" id="fPass2" type="password" placeholder="再输一遍" autocomplete="new-password" />
+      </div>
       <div id="inviteWrap" class="hidden">
         <label class="lab" for="fInvite">邀请码</label>
         <input class="inp" id="fInvite" type="text" placeholder="注册需要邀请码" />
@@ -406,7 +411,6 @@ tbody tr:nth-child(3n) .stamp{transform:rotate(-2deg)}
 
     <div class="slip-foot">
       <span id="slipSwitch">还没有账号？<button type="button" class="link" id="toRegister">申请登记</button></span>
-      <button type="button" class="link" id="skipDemo">跳过（演示）</button>
     </div>
   </form>
 </div>
@@ -423,16 +427,16 @@ tbody tr:nth-child(3n) .stamp{transform:rotate(-2deg)}
     </div>
 
     <nav class="nav" id="nav">
-      <div class="nav-label">登记册</div>
-      <button class="nav-item on" data-view="overview">
+      <div class="nav-label" data-admin>登记册</div>
+      <button class="nav-item on" data-view="overview" data-admin>
         <svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M4 19V9m5 10V9m5 10V9m5 10V9"/></svg>
         总览 <span class="nav-count" id="cUsers">0</span>
       </button>
-      <button class="nav-item" data-view="users">
+      <button class="nav-item" data-view="users" data-admin>
         <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.4 2.7-5.4 6-5.4s6 2 6 5.4"/><path d="M16 11.2a3 3 0 1 0 0-6"/><path d="M18 20c0-2.4-.8-4-2-5"/></svg>
         账号 <span class="nav-count" id="cAcct">0</span>
       </button>
-      <button class="nav-item" data-view="invites">
+      <button class="nav-item" data-view="invites" data-admin>
         <svg viewBox="0 0 24 24"><path d="M3 7.5h18v9H3z"/><path d="M3 10.5h18"/><circle cx="17" cy="13.5" r="1.2"/></svg>
         邀请函 <span class="nav-count" id="cInvites">0</span>
       </button>
@@ -645,46 +649,103 @@ tbody tr:nth-child(3n) .stamp{transform:rotate(-2deg)}
 
 <script>
 /* ============================================================
-   演示数据 —— 结构对齐 user-center 的 D1 schema
+   接口层
    ============================================================ */
-const HOUR = 3600, DAY = 86400;
-const now = Math.floor(Date.now() / 1000);
+const API_BASE = 'https://ucenter.june-t.top';
 
-const DB = {
-  me: { id: 'u_a7Kd93mQx1', email: 'june@example.com', status: 'active', created_at: now - 26 * DAY, last_seen: now - 420 },
-
-  users: [
-    { id: 'u_a7Kd93mQx1', email: 'june@example.com',     status: 'active', created_at: now - 26 * DAY, devices: 2, last_seen: now - 420 },
-    { id: 'u_Qp4Lm8Zn7e', email: 'reader@example.com',   status: 'active', created_at: now - 19 * DAY, devices: 1, last_seen: now - 3 * HOUR },
-    { id: 'u_Xc2Vb6Ty9w', email: 'tester@example.com',   status: 'active', created_at: now - 12 * DAY, devices: 1, last_seen: now - 2 * DAY },
-    { id: 'u_Lm8Nb3Ks5r', email: 'old-demo@example.com', status: 'banned', created_at: now - 31 * DAY, devices: 0, last_seen: now - 9 * DAY },
-    { id: 'u_Hz6Wq1Pd4v', email: 'phone@example.com',    status: 'active', created_at: now - 5 * DAY,  devices: 1, last_seen: now - 35 * 60 },
-    { id: 'u_Rt9Fk2Mw6n', email: 'closed@example.com',   status: 'deleted', created_at: now - 47 * DAY, devices: 0, last_seen: now - 12 * DAY },
-  ],
-
-  invites: [
-    { hash: 'k9Fq…3aB',  note: 'JMReader 内测',  max_uses: 5, uses: 3, expires_at: now + 12 * DAY, created_at: now - 8 * DAY },
-    { hash: 'Pm2L…8xK',  note: 'music-flutter',  max_uses: 1, uses: 1, expires_at: now + 4 * DAY,  created_at: now - 3 * DAY },
-    { hash: 'Rw7T…1qN',  note: 'cicd 面板登录',  max_uses: 1, uses: 0, expires_at: now + 7 * DAY,  created_at: now - 2 * HOUR },
-    { hash: 'Vd3Y…6mZ',  note: '',               max_uses: 0, uses: 11, expires_at: null,          created_at: now - 21 * DAY },
-    { hash: 'Bn5J…4tC',  note: '已过期的一批',   max_uses: 3, uses: 1, expires_at: now - 2 * DAY,  created_at: now - 30 * DAY },
-  ],
-
-  devices: [
-    { id: 'dev_M9OQIEZ9dFk', name: 'MacBook Pro', platform: 'macOS · Safari',  last_seen: now - 420,     created_at: now - 26 * DAY, revoked: false, current: true },
-    { id: 'dev_T5gKdTnEcvJ', name: 'iPhone 15',   platform: 'iOS · App',       last_seen: now - 6 * HOUR, created_at: now - 11 * DAY, revoked: false, current: false },
-    { id: 'dev_8bY2VAA4fZ1', name: '旧平板',       platform: 'Android · Chrome', last_seen: now - 21 * DAY, created_at: now - 44 * DAY, revoked: true,  current: false },
-  ],
-
-  attempts: [
-    { at: now - 35 * 60, email: 'phone@example.com',   ip: '198.51.100.24',   ok: true },
-    { at: now - 3 * HOUR, email: 'reader@example.com', ip: '203.0.113.88',    ok: true },
-    { at: now - 8 * HOUR, email: 'old-demo@example.com', ip: '192.0.2.14',    ok: false },
-    { at: now - 1 * DAY,  email: 'tester@example.com', ip: '198.51.100.31',   ok: true },
-    { at: now - 2 * DAY,  email: 'nobody@example.com', ip: '203.0.113.5',     ok: false },
-    { at: now - 2 * DAY - 40, email: 'nobody@example.com', ip: '203.0.113.5', ok: false },
-  ],
+// 存令牌的键。access 15 分钟过期，refresh 90 天且每次刷新即轮换
+const TK = {
+  access: 'uc_access_token',
+  refresh: 'uc_refresh_token',
+  device: 'uc_device_id',
+  email: 'uc_email',
+  role: 'uc_role',
 };
+function tkGet(k) { try { return localStorage.getItem(TK[k]) || ''; } catch (e) { return ''; } }
+function tkSet(k, v) {
+  try { v ? localStorage.setItem(TK[k], v) : localStorage.removeItem(TK[k]); } catch (e) { /* 隐私模式忽略 */ }
+}
+function tkClear() { ['access', 'refresh', 'email', 'role'].forEach((k) => tkSet(k, '')); }
+
+// 设备号持久化：用户中心靠它把令牌归到同一台设备，便于在「我的设备」里单独吊销
+function deviceId() {
+  let d = tkGet('device');
+  if (!d) {
+    d = 'web_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    tkSet('device', d);
+  }
+  return d;
+}
+
+// 并发 401 时只刷新一次：刷新令牌是一次性的，并发复用会被判为泄露并吊销整条链
+let refreshing = null;
+async function refreshTokens() {
+  if (refreshing) return refreshing;
+  const rt = tkGet('refresh');
+  if (!rt) throw new Error('未登录');
+  refreshing = (async () => {
+    const res = await fetch(API_BASE + '/v1/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: rt, app: 'cicd' }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || '登录已过期');
+    tkSet('access', data.access_token);
+    tkSet('refresh', data.refresh_token);
+    return data;
+  })();
+  try { return await refreshing; } finally { refreshing = null; }
+}
+
+/** 统一请求出口：自动带令牌，401 时刷新一次再重试，仍失败则弹回登录 */
+async function api(path, opts) {
+  const req = opts || {};
+  const send = () => {
+    const headers = Object.assign({}, req.headers);
+    const token = tkGet('access');
+    if (token) headers.Authorization = 'Bearer ' + token;
+    return fetch(API_BASE + path, Object.assign({}, req, { headers }));
+  };
+
+  let res = await send();
+  if (res.status === 401) {
+    try {
+      await refreshTokens();
+      res = await send();
+    } catch (e) {
+      needLogin('登录已过期，请重新登录');
+      throw new Error('登录已过期');
+    }
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || data.error || ('请求失败 ' + res.status));
+  return data;
+}
+
+/** 表单提交类请求用这个：错误信息原样抛给调用方展示，不触发重新登录 */
+async function post(path, body) {
+  const res = await fetch(API_BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || data.error || ('请求失败 ' + res.status));
+  return data;
+}
+
+/* 页面状态：全部来自接口，渲染函数只读这里 */
+const state = {
+  role: '',
+  me: null,
+  stats: { users: 0, banned: 0, deleted: 0, devices: 0, invites: 0 },
+  attempts: [],
+  users: [],
+  invites: [],
+  devices: [],
+};
+const isAdmin = () => state.role === 'admin';
 
 /* ============================================================
    工具
@@ -693,7 +754,8 @@ const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
 function ago(ts) {
-  const d = now - ts;
+  if (!ts) return '—';
+  const d = nowSec() - ts;
   if (d < 60) return '刚刚';
   if (d < 3600) return Math.floor(d / 60) + ' 分钟前';
   if (d < 86400) return Math.floor(d / 3600) + ' 小时前';
@@ -725,9 +787,10 @@ function stampOf(user) {
   if (user.devices > 0) return '<span class="stamp ok">在册</span>';
   return '<span class="stamp wait">待启用</span>';
 }
-function statusWord(s) { return { active: '在册', banned: '已封禁', deleted: '已注销' }[s] || s; }
+function nowSec() { return Math.floor(Date.now() / 1000); }
 function inviteState(inv) {
-  if (inv.expires_at && inv.expires_at < now) return ['off', '已过期'];
+  const n = nowSec();
+  if (inv.expires_at && inv.expires_at < n) return ['off', '已过期'];
   if (inv.max_uses !== 0 && inv.uses >= inv.max_uses) return ['off', '已用尽'];
   return ['ok', '可用'];
 }
@@ -736,23 +799,19 @@ function inviteState(inv) {
    渲染
    ============================================================ */
 function renderOverview() {
-  const banned = DB.users.filter((u) => u.status === 'banned').length;
-  const deleted = DB.users.filter((u) => u.status === 'deleted').length;
-  const live = DB.devices.filter((d) => !d.revoked).length;
-  const usable = DB.invites.filter((i) => inviteState(i)[1] === '可用').length;
+  const s = state.stats || {};
+  $('#sUsers').textContent = s.users ?? 0;
+  $('#sUsersNote').textContent = (s.deleted > 0) ? `登记的总数 · 其中 ${s.deleted} 个已注销` : '登记的总数';
+  $('#sBanned').textContent = s.banned ?? 0;
+  $('#sDevices').textContent = s.devices ?? 0;
+  $('#sInvites').textContent = s.invites ?? 0;
 
-  $('#sUsers').textContent = DB.users.length;
-  $('#sUsersNote').textContent = deleted ? `登记的总数 · 其中 ${deleted} 个已注销` : '登记的总数';
-  $('#sBanned').textContent = banned;
-  $('#sDevices').textContent = live;
-  $('#sInvites').textContent = usable;
+  $('#cUsers').textContent = s.users ?? 0;
+  $('#cAcct').textContent = s.users ?? 0;
+  $('#cInvites').textContent = state.invites.length;
+  $('#cDev').textContent = s.devices ?? 0;
 
-  $('#cUsers').textContent = DB.users.length;
-  $('#cAcct').textContent = DB.users.length;
-  $('#cInvites').textContent = DB.invites.length;
-  $('#cDev').textContent = DB.devices.filter((d) => !d.revoked).length;
-
-  $('#attemptRows').innerHTML = DB.attempts.map((a) => `
+  $('#attemptRows').innerHTML = state.attempts.map((a) => `
     <tr>
       <td class="mute num">${stamp(a.at)}<div class="sub">${ago(a.at)}</div></td>
       <td><div class="mail">${esc(a.email)}</div></td>
@@ -763,31 +822,33 @@ function renderOverview() {
 
 let userFilter = 'all', userQuery = '';
 function renderUsers() {
-  const rows = DB.users.filter((u) => {
+  const me = state.me;
+  const rows = state.users.filter((u) => {
     if (userFilter !== 'all' && u.status !== userFilter) return false;
-    if (userQuery && !(u.email.toLowerCase().includes(userQuery) || u.id.toLowerCase().includes(userQuery))) return false;
+    if (userQuery && !((u.email || '').toLowerCase().includes(userQuery) || (u.id || '').toLowerCase().includes(userQuery))) return false;
     return true;
   });
-  $('#usersTotal').textContent = DB.users.length;
+  $('#usersTotal').textContent = state.users.length;
 
   $('#userRows').innerHTML = rows.length ? rows.map((u) => {
-    const self = u.id === DB.me.id;
+    const self = me && u.id === me.id;
     const gone = u.status === 'deleted';
-    // 已注销是终态，只留一个「恢复」；其余按状态给封禁/解封 + 删除
+    const devCount = u.devices || 0;
     const acts = gone
       ? `<button class="btn tiny" data-act="restore" data-id="${u.id}">恢复</button>`
-      : `<button class="btn tiny" data-act="revoke" data-id="${u.id}" ${u.devices === 0 ? 'disabled' : ''}>强制下线</button>
+      : `<button class="btn tiny" data-act="revoke" data-id="${u.id}" ${devCount === 0 ? 'disabled' : ''}>强制下线</button>
          <button class="btn tiny ${u.status === 'banned' ? '' : 'danger'}" data-act="ban" data-id="${u.id}" ${self ? 'disabled' : ''}>${u.status === 'banned' ? '解封' : '封禁'}</button>
          <button class="btn tiny danger" data-act="del" data-id="${u.id}" ${self ? 'disabled' : ''}>删除</button>`;
+    const sub = self ? '我自己' : gone ? '已注销 · 业务数据保留' : (u.last_seen ? '最近查验 ' + ago(u.last_seen) : '从未查验');
     return `
     <tr data-id="${u.id}">
       <td><span class="reg-no">${esc(shortId(u.id))}</span></td>
       <td>
         <div class="mail${gone ? ' gone' : ''}">${esc(u.email)}</div>
-        <div class="sub">${self ? '我自己' : gone ? '已注销 · 业务数据保留' : '最近查验 ' + ago(u.last_seen)}</div>
+        <div class="sub">${sub}</div>
       </td>
       <td>${stampOf(u)}</td>
-      <td class="num">${u.devices} 台</td>
+      <td class="num">${devCount} 台</td>
       <td class="mute num">${stamp(u.created_at)}</td>
       <td><div class="rowacts">${acts}</div></td>
     </tr>`;
@@ -795,13 +856,13 @@ function renderUsers() {
 }
 
 function renderInvites() {
-  $('#invitesTotal').textContent = DB.invites.length;
-  $('#inviteRows').innerHTML = DB.invites.map((i) => {
+  $('#invitesTotal').textContent = state.invites.length;
+  $('#inviteRows').innerHTML = state.invites.map((i) => {
     const [k, label] = inviteState(i);
     const max = i.max_uses === 0 ? '不限' : i.max_uses;
     return `
     <tr>
-      <td><div class="mail">${esc(i.note || '未备注')}</div><div class="sub">${esc(i.hash)}</div></td>
+      <td><div class="mail">${esc(i.note || '未备注')}</div><div class="sub">${esc(shortId(i.id))}</div></td>
       <td class="num">${i.uses} / ${max}</td>
       <td class="mute num">${i.expires_at ? stamp(i.expires_at) : '长期有效'}</td>
       <td class="mute num">${stamp(i.created_at)}</td>
@@ -811,34 +872,39 @@ function renderInvites() {
 }
 
 function renderDevices() {
-  const live = DB.devices.filter((d) => !d.revoked);
+  const live = state.devices.filter((d) => !d.revoked_at);
   $('#devTotal').textContent = live.length;
-  $('#devList').innerHTML = DB.devices.map((d) => `
+  $('#devList').innerHTML = state.devices.map((d) => {
+    const revoked = !!d.revoked_at;
+    return `
     <div class="dev">
-      <span class="dot ${d.revoked ? 'off' : d.current ? 'now' : ''}"></span>
+      <span class="dot ${revoked ? 'off' : d.current ? 'now' : ''}"></span>
       <div class="dev-body">
-        <div class="dev-name">${esc(d.name)}${d.current ? ' <span class="stamp ok" style="margin-left:6px">本机</span>' : ''}</div>
-        <div class="dev-meta">${esc(d.platform)} · 登记于 ${stamp(d.created_at)} · 最近活跃 ${ago(d.last_seen)}</div>
+        <div class="dev-name">${esc(d.name || '未命名设备')}${d.current ? ' <span class="stamp ok" style="margin-left:6px">本机</span>' : ''}</div>
+        <div class="dev-meta">${esc(d.platform || '')} · 登记于 ${stamp(d.created_at)} · 最近活跃 ${ago(d.last_seen)}</div>
         <div class="dev-meta">${esc(d.id)}</div>
       </div>
-      ${d.revoked
+      ${revoked
         ? '<span class="stamp off">已吊销</span>'
         : `<button class="btn tiny ${d.current ? '' : 'danger'}" data-revoke="${d.id}" ${d.current ? 'disabled' : ''}>${d.current ? '当前设备' : '吊销'}</button>`}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function renderProfile() {
-  const me = DB.users.find((u) => u.id === DB.me.id) || DB.me;
-  $('#pId').textContent = DB.me.id;
-  $('#pEmail').textContent = DB.me.email;
-  $('#pStatus').innerHTML = stampOf(me);
-  $('#pCreated').textContent = stamp(DB.me.created_at);
-  $('#pSeen').textContent = ago(DB.me.last_seen);
-  $('#pAccess').textContent = 'eyJhbGci…' + Math.random().toString(36).slice(2, 6) + '（15 分钟）';
-  $('#pRefresh').textContent = '••••••••••••••••••••（90 天，每次刷新即轮换）';
-  $('#pDevice').textContent = DB.devices[0].id;
-  $('#whoami').textContent = DB.me.email;
-  $('#whoamiSub').textContent = '已查验 · ' + shortId(DB.me.id);
+  const me = state.me || {};
+  $('#pId').textContent = me.id || '—';
+  $('#pEmail').textContent = me.email || '—';
+  $('#pStatus').innerHTML = me.status === 'banned' ? '<span class="stamp no">已封禁</span>'
+    : me.status === 'deleted' ? '<span class="stamp off">已注销</span>'
+    : '<span class="stamp ok">在册</span>';
+  $('#pCreated').textContent = me.created_at ? stamp(me.created_at) : '—';
+  $('#pSeen').textContent = '—';
+  $('#pAccess').textContent = '15 分钟后过期，前端静默续签';
+  $('#pRefresh').textContent = '90 天，每次刷新即轮换';
+  $('#pDevice').textContent = state.device_id || '—';
+  $('#whoami').textContent = me.email || '—';
+  $('#whoamiSub').textContent = (isAdmin() ? '管理员' : '普通用户') + (me.id ? ' · ' + shortId(me.id) : '');
 }
 
 function renderAll() {
@@ -878,8 +944,14 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDialo
 $('#userRows').onclick = (e) => {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
-  const u = DB.users.find((x) => x.id === btn.dataset.id);
+  const u = state.users.find((x) => x.id === btn.dataset.id);
   if (!u) return;
+
+  const setStatus = (id, status) => api('/v1/admin/users/' + id, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
 
   if (btn.dataset.act === 'del') {
     openDialog(`
@@ -890,23 +962,19 @@ $('#userRows').onclick = (e) => {
       30 天冷静期内可以在这里恢复。</p>
       <div class="row">
         <button class="btn" data-close>取消</button>
-        <button class="btn seal" data-do="del">确认注销</button>
+        <button class="btn seal" data-do>确认注销</button>
       </div>`);
-    $('#ticket').onclick = (ev) => {
+    $('#ticket').onclick = async (ev) => {
       if (ev.target.hasAttribute('data-close')) return closeDialog();
       if (!ev.target.hasAttribute('data-do')) return;
-      u.status = 'deleted';
-      u.devices = 0;
-      closeDialog(); renderAll();
-      toast('已注销，业务数据保留');
+      try { await setStatus(u.id, 'deleted'); closeDialog(); toast('已注销，业务数据保留'); await loadAll(); }
+      catch (err) { toast(err.message); }
     };
     return;
   }
 
   if (btn.dataset.act === 'restore') {
-    u.status = 'active';
-    renderAll();
-    toast('已恢复该账号');
+    (async () => { try { await setStatus(u.id, 'active'); toast('已恢复该账号'); await loadAll(); } catch (err) { toast(err.message); } })();
     return;
   }
 
@@ -920,15 +988,13 @@ $('#userRows').onclick = (e) => {
         : '解除后该账号可以重新登录，需重新登记设备。'}</p>
       <div class="row">
         <button class="btn" data-close>取消</button>
-        <button class="btn ${banning ? 'seal' : 'ink'}" data-do="ban">${banning ? '确认封禁' : '解除封禁'}</button>
+        <button class="btn ${banning ? 'seal' : 'ink'}" data-do>${banning ? '确认封禁' : '解除封禁'}</button>
       </div>`);
-    $('#ticket').onclick = (ev) => {
+    $('#ticket').onclick = async (ev) => {
       if (ev.target.hasAttribute('data-close')) return closeDialog();
       if (!ev.target.hasAttribute('data-do')) return;
-      u.status = banning ? 'banned' : 'active';
-      if (banning) u.devices = 0;
-      closeDialog(); renderAll();
-      toast(banning ? '已封禁，令牌全部吊销' : '已解除封禁');
+      try { await setStatus(u.id, banning ? 'banned' : 'active'); closeDialog(); toast(banning ? '已封禁，令牌全部吊销' : '已解除封禁'); await loadAll(); }
+      catch (err) { toast(err.message); }
     };
     return;
   }
@@ -936,17 +1002,16 @@ $('#userRows').onclick = (e) => {
   if (btn.dataset.act === 'revoke') {
     openDialog(`
       <h3>强制该账号下线？</h3>
-      <p>${esc(u.email)}<br />该账号名下 ${u.devices} 台设备的令牌会全部作废，需重新登录。</p>
+      <p>${esc(u.email)}<br />该账号名下所有设备的令牌会全部作废，需重新登录。</p>
       <div class="row">
         <button class="btn" data-close>取消</button>
-        <button class="btn seal" data-do="revoke">全部下线</button>
+        <button class="btn seal" data-do>全部下线</button>
       </div>`);
-    $('#ticket').onclick = (ev) => {
+    $('#ticket').onclick = async (ev) => {
       if (ev.target.hasAttribute('data-close')) return closeDialog();
       if (!ev.target.hasAttribute('data-do')) return;
-      u.devices = 0;
-      closeDialog(); renderAll();
-      toast('已强制下线');
+      try { await api('/v1/admin/users/' + u.id + '/revoke', { method: 'POST' }); closeDialog(); toast('已强制下线'); await loadAll(); }
+      catch (err) { toast(err.message); }
     };
   }
 };
@@ -966,29 +1031,28 @@ $('#btnNewInvite').onclick = () => {
     </div>
     <div class="row">
       <button class="btn" data-close>取消</button>
-      <button class="btn ink" data-do="make">签发</button>
+      <button class="btn ink" data-do>签发</button>
     </div>`);
-  $('#ticket').onclick = (ev) => {
+  $('#ticket').onclick = async (ev) => {
     if (ev.target.hasAttribute('data-close')) return closeDialog();
     if (!ev.target.hasAttribute('data-do')) return;
     const note = $('#niNote').value.trim();
     const uses = Math.max(0, parseInt($('#niUses').value || '1', 10));
     const days = Math.max(0, parseInt($('#niDays').value || '7', 10));
-    const code = Array.from({ length: 12 }, () => 'abcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 32)]).join('');
-
-    DB.invites.unshift({
-      hash: code.slice(0, 4) + '…' + code.slice(-3),
-      note, max_uses: uses, uses: 0,
-      expires_at: days ? now + days * DAY : null,
-      created_at: now,
-    });
-    renderAll();
-    openDialog(`
-      <h3>已签发</h3>
-      <p>把这一串交给对方，用于注册时填写。关掉之后再也查不到。</p>
-      <div class="code">${code}</div>
-      <div class="row"><button class="btn ink" data-close>我已记下</button></div>`);
-    $('#ticket').onclick = (ev) => { if (ev.target.hasAttribute('data-close')) closeDialog(); };
+    try {
+      const res = await api('/v1/admin/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note, max_uses: uses, expires_in_days: days }),
+      });
+      await loadAll();
+      openDialog(`
+        <h3>已签发</h3>
+        <p>把这一串交给对方，用于注册时填写。关掉之后再也查不到。</p>
+        <div class="code">${esc(res.code)}</div>
+        <div class="row"><button class="btn ink" data-close>我已记下</button></div>`);
+      $('#ticket').onclick = (ev2) => { if (ev2.target.hasAttribute('data-close')) closeDialog(); };
+    } catch (err) { toast(err.message); }
   };
 };
 
@@ -996,34 +1060,41 @@ $('#btnNewInvite').onclick = () => {
 $('#devList').onclick = (e) => {
   const btn = e.target.closest('button[data-revoke]');
   if (!btn) return;
-  const d = DB.devices.find((x) => x.id === btn.dataset.revoke);
+  const d = state.devices.find((x) => x.id === btn.dataset.revoke);
   if (!d) return;
   openDialog(`
     <h3>吊销这台设备？</h3>
-    <p>${esc(d.name)} · ${esc(d.platform)}<br />吊销后它持有的刷新令牌立即失效，需重新登录。</p>
+    <p>${esc(d.name || '未命名设备')} · ${esc(d.platform || '')}<br />吊销后它持有的刷新令牌立即失效，需重新登录。</p>
     <div class="row">
       <button class="btn" data-close>取消</button>
-      <button class="btn seal" data-do="rv">确认吊销</button>
+      <button class="btn seal" data-do>确认吊销</button>
     </div>`);
-  $('#ticket').onclick = (ev) => {
+  $('#ticket').onclick = async (ev) => {
     if (ev.target.hasAttribute('data-close')) return closeDialog();
     if (!ev.target.hasAttribute('data-do')) return;
-    d.revoked = true;
-    const owner = DB.users.find((u) => u.id === DB.me.id);
-    if (owner) owner.devices = DB.devices.filter((x) => !x.revoked).length;
-    closeDialog(); renderAll();
-    toast('设备已吊销');
+    try {
+      await api('/v1/me/devices/' + d.id, { method: 'DELETE' });
+      closeDialog();
+      toast('设备已吊销');
+      const dv = await api('/v1/me/devices');
+      state.devices = dv.devices || [];
+      renderDevices();
+    } catch (err) { toast(err.message); }
   };
 };
 
 /* 改密 */
-$('#btnPass').onclick = () => {
+$('#btnPass').onclick = async () => {
   const o = $('#pOld').value, n = $('#pNew').value;
   if (!o || !n) return toast('请填写当前口令与新口令');
   if (n.length < 8) return toast('新口令至少 8 位');
-  $('#pOld').value = $('#pNew').value = '';
-  renderProfile();
-  toast('口令已更新，本机已换发新令牌');
+  try {
+    const res = await post('/v1/me/password', { old_password: o, new_password: n });
+    tkSet('access', res.access_token);
+    tkSet('refresh', res.refresh_token);
+    $('#pOld').value = $('#pNew').value = '';
+    toast('口令已更新，本机已换发新令牌');
+  } catch (err) { toast(err.message); }
 };
 
 /* 退出 */
@@ -1033,14 +1104,16 @@ $('#btnLogout').onclick = () => {
     <p>会同时吊销本机在服务端的刷新令牌。</p>
     <div class="row">
       <button class="btn" data-close>取消</button>
-      <button class="btn ink" data-do="out">退出</button>
+      <button class="btn ink" data-do>退出</button>
     </div>`);
-  $('#ticket').onclick = (ev) => {
+  $('#ticket').onclick = async (ev) => {
     if (ev.target.hasAttribute('data-close')) return closeDialog();
     if (!ev.target.hasAttribute('data-do')) return;
     closeDialog();
-    $('#curtain').classList.remove('hide');
-    toast('已退出');
+    const rt = tkGet('refresh');
+    if (rt) { try { await post('/v1/auth/logout', { refresh_token: rt }); } catch (e) { /* 本地照常清除 */ } }
+    tkClear();
+    location.reload();
   };
 };
 
@@ -1054,6 +1127,7 @@ function setMode(m) {
   $('#slipTitle').textContent = isReg ? '申请登记' : '查验身份';
   $('#slipSub').textContent = isReg ? 'User Center · Enroll' : 'User Center · Admission';
   $('#inviteWrap').classList.toggle('hidden', !isReg);
+  $('#pass2Wrap').classList.toggle('hidden', !isReg);
   $('#slipBtn').textContent = isReg ? '提交申请' : '进入登记处';
   $('#slipSwitch').innerHTML = isReg
     ? '已有账号？<button type="button" class="link" id="toLogin">返回查验</button>'
@@ -1066,36 +1140,99 @@ function bindSwitch() {
   if (a) a.onclick = () => setMode('register');
   if (b) b.onclick = () => setMode('login');
 }
-bindSwitch();
 
 function showAlert(msg) {
   $('#slipAlert').innerHTML = `<div class="alert">${esc(msg)}</div>`;
 }
+function showCurtain() { $('#curtain').classList.remove('hide'); }
+function hideCurtain() { $('#curtain').classList.add('hide'); }
+function needLogin(msg) { tkClear(); showAlert(msg || ''); showCurtain(); }
 
-$('#slip').onsubmit = (e) => {
+/* 登录 / 注册：都走用户中心，成功后统一 loadMe 拿真实角色 */
+$('#slip').onsubmit = async (e) => {
   e.preventDefault();
   const email = $('#fEmail').value.trim();
   const pass = $('#fPass').value;
   if (!email.includes('@')) return showAlert('邮箱格式看起来不对');
   if (pass.length < 8) return showAlert('口令至少 8 位');
-  if (mode === 'register' && !$('#fInvite').value.trim()) return showAlert('注册需要邀请码');
+  if (mode === 'register') {
+    if ($('#fPass2').value !== pass) return showAlert('两次输入的口令不一致');
+    if (!$('#fInvite').value.trim()) return showAlert('注册需要邀请码');
+  }
 
-  // 演示：任意凭据都放行
-  DB.me.email = email;
-  $('#whoami').textContent = email;
-  enterConsole(mode === 'register' ? '登记完成，已放行' : '查验通过');
+  const btn = $('#slipBtn');
+  const oldText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '处理中…';
+  try {
+    const payload = mode === 'register'
+      ? { email, password: pass, app: 'cicd', invite_code: $('#fInvite').value.trim(), device_id: deviceId(), device_name: '身份登记处', platform: 'web' }
+      : { email, password: pass, app: 'cicd', device_id: deviceId(), device_name: '身份登记处', platform: 'web' };
+    const r = await post(mode === 'register' ? '/v1/auth/register' : '/v1/auth/login', payload);
+    tkSet('access', r.access_token);
+    tkSet('refresh', r.refresh_token);
+    tkSet('device', r.device_id);
+    tkSet('email', email);
+    $('#fPass').value = $('#fPass2').value = $('#fInvite').value = '';
+
+    await loadMe();
+    applyNav();
+    hideCurtain();
+    await loadAll();
+    toast(mode === 'register' ? '登记完成，已放行' : '查验通过');
+  } catch (err) {
+    showAlert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
 };
 
-$('#skipDemo').onclick = (e) => { e.preventDefault(); enterConsole('已跳过查验（演示）'); };
-
-function enterConsole(msg) {
-  $('#curtain').classList.add('hide');
-  renderAll();
-  toast(msg);
+/* ============================================================
+   数据加载与启动
+   ============================================================ */
+function switchTo(view) {
+  $$('#nav .nav-item').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
+  $$('.view').forEach((v) => v.classList.toggle('on', v.dataset.view === view));
 }
 
-/* 启动 */
-renderAll();
+// 根据角色显示/隐藏管理入口；非管理员只看到「我的档案 / 我的设备」
+function applyNav() {
+  const admin = isAdmin();
+  $$('#nav [data-admin]').forEach((el) => { el.style.display = admin ? '' : 'none'; });
+  switchTo(admin ? 'overview' : 'profile');
+}
+
+async function loadMe() {
+  const d = await api('/v1/me');
+  state.me = d.user;
+  state.device_id = d.device_id;
+  state.role = d.role || (d.user && d.user.role) || 'user';
+  tkSet('role', state.role);
+}
+
+async function loadAll() {
+  if (isAdmin()) {
+    try { const ov = await api('/v1/admin/overview'); state.stats = ov.stats || {}; state.attempts = ov.attempts || []; } catch (err) { /* 单块失败不阻断 */ }
+    try { const us = await api('/v1/admin/users?limit=200'); state.users = us.users || []; } catch (err) { /* 同上 */ }
+    try { const inv = await api('/v1/admin/invites'); state.invites = inv.invites || []; } catch (err) { /* 同上 */ }
+  }
+  try { const dv = await api('/v1/me/devices'); state.devices = dv.devices || []; } catch (err) { /* 同上 */ }
+  renderAll();
+}
+
+(async function boot() {
+  bindSwitch();
+  if (!tkGet('access')) { showCurtain(); return; }
+  try {
+    await loadMe();
+    applyNav();
+    hideCurtain();
+    await loadAll();
+  } catch (e) {
+    needLogin('登录已过期，请重新登录');
+  }
+})();
 </script>
 </body>
 </html>
