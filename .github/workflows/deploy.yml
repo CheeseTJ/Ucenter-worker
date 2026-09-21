@@ -3,17 +3,13 @@ name: Deploy
 # push 到 master 自动 wrangler deploy。
 # schema.sql 是幂等的（CREATE TABLE IF NOT EXISTS），每次部署顺带执行一次。
 #
-# 凭据约定：部署用的 Cloudflare API Token 统一存放在 KV 命名空间「infra-secrets」
-# 的 cloudflare-api-token 键，需要时从那取。本地副本见 gitignore 的 cloudflare-api-token.txt。
-#
-# 该 token 配了 IP 白名单，只放行本机出口地址：
-#   149.118.55.214/32
-#   2603:c02b:30b:5c01:0:b6be:fffe:785e   （IPv6，控制台会省略 /128，属正常归一化）
-# 两个注意点：
-#   1. IPv6 是 DHCPv6 动态下发的（非静态固定）。若哪天出口地址变了，会报
-#      9109 Cannot use the access token from location，届时把新地址补进白名单即可。
-#   2. GitHub 托管 runner 的出口 IP 与上面完全不同，用这个 token 同样报 9109。
-#      要在 CI 里跑，需另建一个不限 IP 的窄权限 token，或改用本机的 self-hosted runner。
+# 凭据：部署用的 Cloudflare API Token 存在仓库 secret「CLOUDFLARE_API_TOKEN」，
+# 在 Cloudflare 控制台 My Profile → API Tokens 创建，值只在创建时显示一次。
+# 只需这两项权限，且未配 IP 白名单，因此可以直接跑在 GitHub 托管 runner 上：
+#   Account → Workers Scripts : Edit    （wrangler deploy）
+#   Account → D1 : Edit                 （wrangler d1 execute --remote）
+# 换 token 时记得同步更新这个 secret，否则 Deploy 步骤会报
+# "In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN".
 on:
   push:
     branches: [master]
