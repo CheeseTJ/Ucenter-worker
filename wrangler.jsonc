@@ -6,8 +6,8 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "user-center",
 	"main": "src/index.ts",
-	// 账号 / 数据库 ID 不写进仓库（仓库是公开的），部署时由环境变量提供
-	"account_id": "<your-cloudflare-account-id>",
+	// account_id 不写在这里：仓库是公开的，部署时由 CLOUDFLARE_ACCOUNT_ID 环境变量提供。
+	// （wrangler.jsonc 里的值优先级高于环境变量，所以必须完全省略该字段）
 	"compatibility_date": "2026-05-29",
 	"observability": {
 		"enabled": true
@@ -17,8 +17,9 @@
 		{
 			"binding": "DB",
 			"database_name": "user-center-db",
-			// 改成你自己的 D1 库 ID（wrangler d1 create 后输出）
-			"database_id": "<your-d1-database-id>"
+			// 仓库公开，所以留占位符；CI 部署前会用 D1_DATABASE_ID secret 替换这一行。
+			// 本地开发请改成你自己的 D1 库 ID（wrangler d1 create 后输出）。
+			"database_id": "__D1_DATABASE_ID__"
 		}
 	],
 	// 撞库防护：同一 Cloudflare 节点内，同一 key 每分钟最多 20 次认证尝试

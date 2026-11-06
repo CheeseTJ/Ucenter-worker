@@ -41,6 +41,22 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Inject D1 database id
+        # wrangler.jsonc 里是占位符（仓库公开，不写真实 ID），这里从 secret 替换
+        env:
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+        run: |
+          set -e
+          if [ -z "$D1_DATABASE_ID" ]; then
+            echo "缺少 D1_DATABASE_ID secret，无法确定 D1 库"
+            exit 1
+          fi
+          sed -i "s|__D1_DATABASE_ID__|${D1_DATABASE_ID}|" wrangler.jsonc
+          if grep -q '__D1_DATABASE_ID__' wrangler.jsonc; then
+            echo "占位符未被替换，检查 wrangler.jsonc"
+            exit 1
+          fi
+
       - name: Deploy
         env:
           # 账号 ID 由 secret 注入（wrangler.jsonc 里是占位符，仓库公开）
