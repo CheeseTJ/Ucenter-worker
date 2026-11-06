@@ -6,7 +6,8 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "user-center",
 	"main": "src/index.ts",
-	"account_id": "1b53bebb48213cfdf6e43cd71d931741",
+	// 账号 / 数据库 ID 不写进仓库（仓库是公开的），部署时由环境变量提供
+	"account_id": "<your-cloudflare-account-id>",
 	"compatibility_date": "2026-05-29",
 	"observability": {
 		"enabled": true
@@ -16,7 +17,8 @@
 		{
 			"binding": "DB",
 			"database_name": "user-center-db",
-			"database_id": "ff49b636-03d2-417a-8fad-8a811114c813"
+			// 改成你自己的 D1 库 ID（wrangler d1 create 后输出）
+			"database_id": "<your-d1-database-id>"
 		}
 	],
 	// 撞库防护：同一 Cloudflare 节点内，同一 key 每分钟最多 20 次认证尝试
