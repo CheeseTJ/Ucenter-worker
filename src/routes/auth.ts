@@ -24,6 +24,7 @@ import {
   rotateRefreshToken,
 } from "../lib/sessions";
 import { sha256Base64Url } from "../lib/token";
+import { notify, table, row as row2, wrap, esc } from "../lib/notify";
 
 export const authRoute = new Hono<AppEnv>();
 
@@ -51,6 +52,11 @@ async function underLimit(c: Context<AppEnv>, key: string): Promise<boolean> {
   return success;
 }
 
+/** 暴力破解告警阈值：同一邮箱在窗口期内失败这么多次就发信。 */
+const BRUTE_FORCE_THRESHOLD = 5;
+/** 统计窗口（秒）。15 分钟内 5 次失败大概率不是手抖。 */
+const BRUTE_FORCE_WINDOW = 15 * 60;
+
 async function recordAttempt(
   env: Env,
   email: string,
@@ -67,6 +73,43 @@ async function recordAttempt(
   } catch (error) {
     // 审计只是旁路：写不进去（例如库写满）也不该让登录本身失败
     console.error("[user-center] 写入登录审计失败", error);
+  }
+
+  // 只在失败时检查：成功登录意味着已经拿到正确口令，不需要告警
+  if (ok) return;
+
+  try {
+    const since = at - BRUTE_FORCE_WINDOW;
+    const row = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM login_attempts WHERE email = ? AND ok = 0 AND at >= ?"
+    )
+      .bind(email, since)
+      .first<{ n: number }>();
+
+    const failures = row?.n ?? 0;
+    // 只在「刚好达到阈值」时发一次。否则第 6、7、8 次失败都会再发一封，
+    // 攻击者持续尝试就会把邮箱刷爆 —— 告警疲劳比没有告警更糟。
+    if (failures !== BRUTE_FORCE_THRESHOLD) return;
+
+    await notify(
+      env,
+      `【Ucenter】检测到暴力破解尝试：${email}`,
+      wrap(
+        "登录失败次数异常",
+        `<p style="font-size:13px;color:#374151;margin:0 0 12px">` +
+          `账号 <strong>${esc(email)}</strong> 在 15 分钟内连续登录失败 ` +
+          `<strong>${failures}</strong> 次，疑似暴力破解。</p>` +
+          table(
+            row2("最近来源 IP", ip) +
+              row2("首次统计起", new Date(since * 1000).toISOString().slice(0, 19).replace("T", " ") + " UTC"),
+          ) +
+          `<p style="font-size:12px;color:#9ca3af;margin:14px 0 0">` +
+          `如果这是你自己在试密码，可以忽略；否则建议检查该账号并考虑改密。</p>`,
+      ),
+    );
+  } catch (error) {
+    // 统计失败不能影响登录流程
+    console.error("[user-center] 暴力破解检测失败", error);
   }
 }
 

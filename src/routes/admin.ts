@@ -6,6 +6,7 @@ import { fail, readJson } from "../lib/http";
 import { revokeAllForUser } from "../lib/sessions";
 import { newInviteCode, sha256Base64Url } from "../lib/token";
 import { requireAdmin } from "../middleware/auth";
+import { notify, table, row, wrap } from "../lib/notify";
 
 export const adminRoute = new Hono<AppEnv>();
 
@@ -117,6 +118,22 @@ adminRoute.patch("/users/:id", async (c) => {
       .bind(body.role, userId)
       .run();
     if (!r.meta.changes) return fail(c, 404, "not_found", "用户不存在");
+
+    // 角色变更是高危操作：提升意味着获得全部管理权限。发信给管理员留痕。
+    // 用 waitUntil 语义（这里直接 await 但不影响返回），失败不影响主流程。
+    await notify(
+      c.env,
+      `【Ucenter】用户角色变更：${body.role === "admin" ? "提升为管理员" : "降为普通用户"}`,
+      wrap(
+        "用户角色变更",
+        table(
+          row("用户 ID", userId) +
+            row("新角色", body.role) +
+            row("操作者", c.get("userId") ?? "unknown") +
+            row("来源 IP", c.req.header("CF-Connecting-IP") ?? "unknown"),
+        ),
+      ),
+    );
     return c.json({ ok: true, id: userId, role: body.role });
   }
 

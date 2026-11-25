@@ -25,6 +25,17 @@ export interface Env {
   LOGIN_ATTEMPT_RETENTION_DAYS?: string;
   /** 允许的跨域来源，逗号分隔；留空表示允许所有来源 */
   ALLOWED_ORIGINS: string;
+
+  // ---- 邮件通知（可选）----
+  // Worker 运行时没有裸 TCP，无法直连 SMTP，只能通过 HTTP 网关转发。
+  // 三项全配齐才生效，缺任一项则静默跳过通知，不影响任何接口。
+
+  /** 邮件网关地址，如 https://mail.june-t.top/internal/mail/send */
+  MAIL_API_URL?: string;
+  /** 网关 Bearer 令牌 */
+  MAIL_API_TOKEN?: string;
+  /** 收件人，逗号分隔 */
+  MAIL_TO?: string;
 }
 
 export interface Variables {
